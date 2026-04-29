@@ -24,49 +24,29 @@ public class OllamaService {
             .build();
 }
 
-//    public Flux<String> chatStream(String model, List<Map<String, Object>> messages) {
-//        Map<String, Object> request = new HashMap<>();
-//        request.put("model", model);
-//        request.put("messages", messages);
-//        request.put("stream", true);
-//
-//        return webClient.post()
-//                .uri("/api/chat")
-//                .contentType(MediaType.APPLICATION_JSON)
-//                .bodyValue(request)
-//                .retrieve()
-//                .bodyToFlux(Map.class)
-//                .map(response -> {
-//                    Map<String, Object> message = (Map<String, Object>) response.get("message");
-//                    return message != null ? message.get("content").toString() : "";
-//                });
-//    }
 public Flux<String> chatStream(String model, List<Map<String, Object>> messages) {
     Map<String, Object> request = new HashMap<>();
     request.put("model", model);
     request.put("messages", messages);
-    request.put("stream", true);
+    request.put("stream", true); // 确保 Ollama 开启流式
+
     return webClient.post()
             .uri("/api/chat")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(request)
             .retrieve()
-            .onStatus(
-                    status -> status.is4xxClientError() || status.is5xxServerError(),
-                    response -> response.bodyToMono(String.class)
-                            .flatMap(body -> Mono.error(new RuntimeException("Ollama API 错误: " + body)))
-            )
             .bodyToFlux(Map.class)
             .map(response -> {
                 Map<String, Object> message = (Map<String, Object>) response.get("message");
-                return message != null ? message.get("content").toString() : "";
+                return message != null && message.get("content") != null
+                        ? message.get("content").toString()
+                        : "";
             })
             .onErrorResume(e -> {
                 System.err.println("聊天流处理错误: " + e.getMessage());
-                return Flux.just("抱歉，处理您的请求时出现了错误: " + e.getMessage());
+                return Flux.just("\n[网络连接异常或模型服务未启动]");
             });
 }
-
 
 
     public String analyzeImage(String base64Image, String prompt) {
