@@ -22,6 +22,9 @@ function App() {
   // Agent mode
   const [agentMode, setAgentMode] = useState(false);
 
+  // Image generation mode
+  const [imageGenMode, setImageGenMode] = useState(false);
+
   // Knowledge base
   const [knowledgeFiles, setKnowledgeFiles] = useState([]);
   const [uploadingKB, setUploadingKB] = useState(false);
@@ -39,6 +42,7 @@ function App() {
     setKnowledgeFiles([]);
     setActiveConversationId(null);
     setAgentMode(false);
+    setImageGenMode(false);
     setIsAuth(false);
   };
 
@@ -93,6 +97,12 @@ function App() {
       });
       if (res.status === 401 || res.status === 403) return handleLogout();
       const data = await res.json();
+      // Rewrite relative /api/image/ URLs to full API URLs for proper image loading
+      data.forEach(m => {
+        if (m.content && m.content.includes('/api/image/')) {
+          m.content = m.content.replace(/\]\(\/api\/image\//g, '](' + API + '/api/image/');
+        }
+      });
       setMessages(data);
     } catch (e) { console.error('加载消息失败', e); }
   };
@@ -386,6 +396,68 @@ function App() {
     }
   };
 
+  const handleImageGenerate = async (prompt) => {
+    if (!prompt.trim() || loading) return;
+    const content = prompt.trim();
+
+    setMessages(prev => [...prev, { role: 'user', content: '[图片生成] ' + content }]);
+    setLoading(true);
+    setMessages(prev => [...prev, { role: 'assistant', content: '正在生成图片...' }]);
+
+    try {
+      const response = await fetch(API + '/api/image/generate', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          prompt: content,
+          width: 1024,
+          height: 1024,
+          model: 'flux',
+          conversationId: activeConversationId
+        })
+      });
+
+      if (response.status === 401 || response.status === 403) return handleLogout();
+      const data = await response.json();
+
+      if (data.success) {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: '![' + content + '](' + API + data.imageUrl + ')\n\n*' + content + '*'
+          };
+          return updated;
+        });
+        fetchConversations();
+        if (!activeConversationId && data.conversationId) {
+          setActiveConversationId(data.conversationId);
+        }
+      } else {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: '[图片生成失败] ' + (data.error || '未知错误')
+          };
+          return updated;
+        });
+      }
+    } catch (e) {
+      console.error('图片生成失败:', e);
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          content: '[图片生成失败，请检查网络连接]'
+        };
+        return updated;
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ================== Effects ==================
 
   useEffect(() => {
@@ -419,9 +491,12 @@ function App() {
         messages={messages}
         loading={loading}
         agentMode={agentMode}
+        imageGenMode={imageGenMode}
+        onImageGenModeChange={setImageGenMode}
         conversationId={activeConversationId}
         onSend={handleSend}
         onFileUpload={handleFileUpload}
+        onImageGenerate={handleImageGenerate}
         onEditMessage={handleEditMessage}
         onBranchSwitch={switchBranch}
       />

@@ -5,12 +5,16 @@ import com.example.ai.entity.ConversationEntity;
 import com.example.ai.repository.ChatMessageRepository;
 import com.example.ai.repository.ConversationRepository;
 import com.example.ai.service.AgentService;
+import com.example.ai.service.ImageGenService;
 import com.example.ai.service.KnowledgeBaseService;
 import com.example.ai.service.OllamaService;
 import com.example.ai.service.RagService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -48,6 +52,9 @@ public class ChatController {
 
     @Autowired
     private AgentService agentService;
+
+    @Autowired
+    private ImageGenService imageGenService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -681,6 +688,84 @@ public class ChatController {
                 }
             }
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    // ================== Image Generation ==================
+
+    @GetMapping("/image/{filename}")
+    public ResponseEntity<byte[]> serveImage(@PathVariable String filename) {
+        try {
+            Path imagePath = imageGenService.getImagePath(filename);
+            if (!Files.exists(imagePath)) {
+                return ResponseEntity.notFound().build();
+            }
+            byte[] imageBytes = Files.readAllBytes(imagePath);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.IMAGE_PNG);
+            headers.setCacheControl("max-age=86400");
+            return new ResponseEntity<>(imageBytes, headers, HttpStatus.OK);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/image/generate")
+    public Map<String, Object> generateImage(@RequestBody Map<String, Object> payload) {
+        String prompt = (String) payload.get("prompt");
+        int width = payload.get("width") != null ? ((Number) payload.get("width")).intValue() : 1024;
+        int height = payload.get("height") != null ? ((Number) payload.get("height")).intValue() : 1024;
+        String model = payload.get("model") != null ? payload.get("model").toString() : "flux";
+        Integer seed = payload.get("seed") != null ? ((Number) payload.get("seed")).intValue() : null;
+        Long conversationId = payload.get("conversationId") != null
+                ? Long.valueOf(payload.get("conversationId").toString()) : null;
+
+        final String currentUserId = getCurrentUserId();
+
+        // Get or create conversation
+        if (conversationId == null) {
+            ConversationEntity conv = new ConversationEntity();
+            conv.setUserId(currentUserId);
+            conv.setTitle("生成图片: " + (prompt.length() > 30 ? prompt.substring(0, 30) + "..." : prompt));
+            conv = conversationRepository.save(conv);
+            conversationId = conv.getId();
+        }
+
+        // Save user message
+        ChatMessageEntity userMsg = saveMessage(currentUserId, "user",
+                "[图片生成] " + prompt, conversationId, null);
+
+        // Generate image
+        String imageFilename;
+        try {
+            imageFilename = imageGenService.generateImage(prompt, width, height, model, seed);
+        } catch (Exception e) {
+            String errorContent = "[图片生成失败] " + e.getMessage();
+            ChatMessageEntity errMsg = saveMessage(currentUserId, "assistant",
+                    errorContent, conversationId, userMsg.getId());
+            return Map.of("success", false, "error", e.getMessage(),
+                    "conversationId", conversationId, "messageId", errMsg.getId());
+        }
+
+        // Save assistant message with image markdown (URL reference, not base64)
+        String imageUrl = "/api/image/" + imageFilename;
+        String imageMarkdown = "![" + prompt + "](" + imageUrl + ")\n\n*" + prompt + "*";
+        ChatMessageEntity assistantMsg = saveMessage(currentUserId, "assistant",
+                imageMarkdown, conversationId, userMsg.getId());
+
+        // Update conversation's active leaf
+        ConversationEntity conv = conversationRepository.findById(conversationId).orElse(null);
+        if (conv != null) {
+            conv.setActiveLeafMessageId(assistantMsg.getId());
+            conversationRepository.save(conv);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("imageUrl", imageUrl);
+        result.put("prompt", prompt);
+        result.put("conversationId", conversationId);
+        result.put("messageId", assistantMsg.getId());
+        return result;
     }
 
     // ================== Command-line Tools ==================

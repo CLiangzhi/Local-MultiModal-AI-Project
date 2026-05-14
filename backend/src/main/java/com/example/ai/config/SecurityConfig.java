@@ -30,6 +30,7 @@ public class SecurityConfig {
                         // ⭐【核心修复 1】：允许 DispatcherType.ASYNC 类型的请求，这是流式输出的关键
                         .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/api/image/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

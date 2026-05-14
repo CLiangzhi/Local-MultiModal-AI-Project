@@ -25,6 +25,9 @@ Thumbs.db
 报告/
 report_images/
 
+# Generated images
+local_data/generated_images/
+
 # Environment
 .env
 .env.local

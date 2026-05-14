@@ -17,7 +17,7 @@ public class ChatMessageEntity {
 
     private String role; // "user", "assistant", "tool", "agent"
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "MEDIUMTEXT")
     private String content;
 
     @Column(name = "conversation_id")
@@ -26,7 +26,7 @@ public class ChatMessageEntity {
     @Column(name = "parent_message_id")
     private Long parentMessageId;
 
-    @Column(name = "tool_calls", columnDefinition = "TEXT")
+    @Column(name = "tool_calls", columnDefinition = "MEDIUMTEXT")
     private String toolCalls; // JSON: [{"name":"read_file","args":{...},"result":"..."}]
 
     @Column(name = "created_at", insertable = false, updatable = false)
