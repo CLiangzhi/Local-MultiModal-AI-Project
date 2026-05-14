@@ -37,6 +37,17 @@ public class KnowledgeBaseService {
         System.out.println("用户 " + userId + " 的资产已安全存储至: " + userDir.resolve(filename));
     }
 
+    // 删除用户的文件
+    public boolean deleteUserFile(String userId, String filename) {
+        Path filePath = rootLocation.resolve(userId).resolve(filename);
+        try {
+            return Files.deleteIfExists(filePath);
+        } catch (IOException e) {
+            System.err.println("删除文件失败: " + e.getMessage());
+            return false;
+        }
+    }
+
     // 列出用户的专属文件列表
     public List<String> listUserFiles(String userId) {
         File folder = rootLocation.resolve(userId).toFile();

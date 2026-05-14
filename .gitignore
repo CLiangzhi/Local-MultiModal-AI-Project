@@ -1,0 +1,30 @@
+# Build artifacts
+backend/target/
+frontend/build/
+
+# Dependencies
+frontend/node_modules/
+
+# IDE & Editor
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude local settings
+.claude/settings.local.json
+
+# Media files (large)
+*.mp4
+*.pptx
+
+# Report & docs (excluded)
+报告/
+report_images/
+
+# Environment
+.env
+.env.local

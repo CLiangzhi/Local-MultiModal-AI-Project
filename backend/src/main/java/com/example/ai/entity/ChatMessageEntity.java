@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
 
-@Data // 自动生成 getter/setter (依赖 Lombok)
+@Data
 @Entity
 @Table(name = "chat_history")
 public class ChatMessageEntity {
@@ -15,10 +15,19 @@ public class ChatMessageEntity {
     @Column(name = "user_id")
     private String userId;
 
-    private String role; // "user" 或 "assistant"
+    private String role; // "user", "assistant", "tool", "agent"
 
     @Column(columnDefinition = "TEXT")
     private String content;
+
+    @Column(name = "conversation_id")
+    private Long conversationId;
+
+    @Column(name = "parent_message_id")
+    private Long parentMessageId;
+
+    @Column(name = "tool_calls", columnDefinition = "TEXT")
+    private String toolCalls; // JSON: [{"name":"read_file","args":{...},"result":"..."}]
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
